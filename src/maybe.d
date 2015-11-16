@@ -84,8 +84,41 @@ abstract class Maybe(T)
 	return Maybe!(R).nothing();
       }
     }
+    Maybe!R fmap(R)(R delegate(T) f)
+    {
+      if (this.isJust) {
+	return Maybe!(R).just(f(this.toJust().value));
+      } else {
+	return Maybe!(R).nothing();
+      }
+    }
   }
   mixin Functor;
+
+  mixin template Computations()
+  {
+    static Maybe!T point(T value)
+    {
+      return Maybe!T.just(value);
+    }
+    Maybe!R compute(R)(Maybe!R function(T) f)
+    {
+      if (isJust) {
+	return f(this.toJust().value);
+      } else {
+	return Maybe!R.nothing();
+      }
+    }
+    Maybe!R compute(R)(Maybe!R delegate(T) f)
+    {
+      if (isJust) {
+	return f(this.toJust().value);
+      } else {
+	return Maybe!R.nothing();
+      }
+    }
+  }
+  mixin Computations;
 }
 
 // test Maybe sound
@@ -134,6 +167,80 @@ unittest
     auto sut = nothing.fmap!(int)((s) => to!int(s));
     assert(sut.isJust == false);
     assert(sut.isNothing == true);
+  }
+}
+
+// test Computations over Maybe
+unittest
+{
+  { // point
+    auto sut = Maybe!int.point(3);
+    assert(sut.isJust);
+    assert(!sut.isNothing);
+    assert(sut.toJust().value == 3);
+  }
+  auto f = (int i) => Maybe!int.point(i * 2);
+  { // compute && just
+    auto just = Maybe!int.just(10);
+    auto sut = just.compute(f);
+    assert(sut.isJust);
+    assert(!sut.isNothing);
+    assert(sut.toJust().value == 20);
+  }
+  { // compute && nothing
+    auto nothing = Maybe!int.nothing();
+    auto sut = nothing.compute(f);
+    assert(!sut.isJust);
+    assert(sut.isNothing);
+  }
+}
+
+// hello world
+unittest
+{
+  {
+    Maybe!string f(string hello) {
+      string g(string world) {
+	return hello ~ " " ~ world ~ "!";
+      }
+      return Maybe!string.point("world").fmap!string(&g);
+    }
+    auto maybe = Maybe!string.just("Hello").compute(&f);
+    assert(maybe.isJust);
+    assert(maybe.toJust().value == "Hello world!");
+  }
+  {
+    Maybe!string hello(string sp) {
+      if (sp == "")
+	return Maybe!string.point(sp ~ "Hello");
+      else
+	return Maybe!string.nothing();
+    }
+    Maybe!string space(string hl) {
+      if (hl == "Hello")
+	return Maybe!string.point(hl ~ " ");
+      else
+	return Maybe!string.nothing();
+    }
+    Maybe!string world(string hs) {
+      if (hs[$-1..$] == " ")
+	return Maybe!string.point(hs ~ "world");
+      else
+	return Maybe!string.nothing();
+    }
+    Maybe!string exclaim(string hw) {
+      if (hw[$-5..$] == "world")
+	return Maybe!string.point(hw ~ "!");
+      else
+	return Maybe!string.nothing();
+    }
+    auto maybe = Maybe!string.point("")
+      .compute(&hello)
+      .compute(&space)
+      .compute(&world)
+      .compute(&exclaim);
+    assert(maybe.isJust);
+    assert(maybe.toJust().value == "Hello world!");
   }
 }
 
