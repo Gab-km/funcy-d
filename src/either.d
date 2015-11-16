@@ -84,8 +84,41 @@ abstract class Either(TLeft, TRight)
 	return Either!(TLeft, R).left(this.toLeft().value);
       }
     }
+    Either!(TLeft, R) fmap(R)(R delegate(TRight) f)
+    {
+      if (this.isRight) {
+	return Either!(TLeft, R).right(f(this.toRight().value));
+      } else {
+	return Either!(TLeft, R).left(this.toLeft().value);
+      }
+    }
   }
   mixin Functor;
+
+  mixin template Computations()
+  {
+    static Either!(TLeft, TRight) point(TRight value)
+    {
+      return Either!(TLeft, TRight).right(value);
+    }
+    Either!(TLeft, R) compute(R)(Either!(TLeft, R) function(TRight) f)
+    {
+      if (this.isRight) {
+	return f(this.toRight().value);
+      } else {
+	return Either!(TLeft, R).left(this.toLeft().value);
+      }
+    }
+    Either!(TLeft, R) compute(R)(Either!(TLeft, R) delegate(TRight) f)
+    {
+      if (this.isRight) {
+	return f(this.toRight().value);
+      } else {
+	return Either!(TLeft, R).left(this.toLeft().value);
+      }
+    }
+  }
+  mixin Computations;
 }
 
 // test Either sound
@@ -137,6 +170,33 @@ unittest
     assert(sut.isRight == true);
     assert(sut.isLeft == false);
     assert(sut.toRight().value == "10");
+  }
+}
+
+// test Computations over Either
+unittest
+{
+  alias either = Either!(string, int);
+  { // point
+    auto sut = either.point(5);
+    assert(!sut.isLeft);
+    assert(sut.isRight);
+    assert(sut.toRight().value == 5);
+  }
+  auto f = (int i) => either.point(i * 3);
+  { // bind && right
+    auto right = either.right(4);
+    auto sut = right.compute(f);
+    assert(sut.isRight);
+    assert(!sut.isLeft);
+    assert(sut.toRight().value == 12);
+  }
+  { // bind && left
+    auto left = either.left("Left");
+    auto sut = left.compute(f);
+    assert(!sut.isRight);
+    assert(sut.isLeft);
+    assert(sut.toLeft().value == "Left");
   }
 }
 
